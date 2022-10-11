@@ -1,0 +1,497 @@
+import pygame ,sys
+import requests
+from pygame.locals import *
+pygame.init()
+pygame.font.init()
+
+# colors
+black = (0, 0, 0)
+white = (255, 255, 255)
+red = (255, 0, 0)
+blue = (0, 0, 255)
+green = (34,139,34)
+yellow = (255,185,15)
+gray = (193,193,193)
+
+# window
+size = (550, 550)
+screen = pygame.display.set_mode(size)
+screen.fill(white)
+pygame.display.set_caption("Sudoku")
+board_line = pygame.Rect(50, 50, 450, 450)
+click = False
+buffer = 5
+mistakes = 0
+
+# images
+background_img = pygame.image.load('Images/background.jpn.png')
+background_img = pygame.transform.scale(background_img,size)
+game_over_bg = pygame.image.load('Images/game_over_bg.png')
+game_over_bg = pygame.transform.scale(background_img,size)
+
+# fonts
+end_font = pygame.font.SysFont('comocsans', 90)
+my_font = pygame.font.SysFont('Comic Sans MS', 35)
+title = pygame.font.SysFont('comocsans', 60)
+subtitle = pygame.font.SysFont('Gill Sans ', 40 )
+rect_font = pygame.font.SysFont('comocsans', 28)
+
+# keyword
+keydown = pygame.KEYDOWN
+escape = pygame.K_ESCAPE
+quit = pygame.QUIT
+click_down = pygame.MOUSEBUTTONDOWN
+click_up = pygame.MOUSEBUTTONUP
+pos = pygame.mouse.get_pos()
+
+
+
+
+
+def draw_text(text, font, color, surface, x, y):
+    textobj = font.render(text, True, color)
+    surface.blit(textobj, (x, y))
+
+
+def draw_board () :
+    for i in range(10) :
+        if (i % 3 )== 0 :
+            pygame.draw.line(screen, black, (50 + 50 * i, 50), (50 + 50 * i, 500), 4)
+            pygame.draw.line(screen, black, (50, 50 + 50 * i), (500, 50 + 50 * i), 4)
+        pygame.draw.line(screen, black, (50 + 50 * i, 50), (50 + 50 * i, 500), 2)
+        pygame.draw.line(screen, black, (50, 50 + 50 * i), (500, 50 + 50 * i), 2)
+
+
+def find_empty_cell(board):
+    for i in range(len(board)):
+        for j in range(len(board[i])):
+            if board[i][j] == 0 :
+                return i, j
+    return None,None
+
+
+def insert (window, play_board, board, row, col):
+    global mistakes
+    while True:
+        for event in pygame.event.get():
+            if event.type == quit:
+                pygame.quit()
+                return
+            if event.type == keydown:
+                if board[row - 1][col - 1] != 0:
+                    return
+
+                if (0 < event.key - 48  < 10): # We are checking for valid input
+                    pygame.draw.rect(screen, white, (row * 50 + buffer, col * 50 + buffer, 50 - 2 * buffer, 50 - 2 * buffer))
+                    if is_valid(play_board, row - 1, col - 1, event.key - 48):
+                        if play_board[row - 1][col - 1] == -1 :
+                            mistakes -= 1
+
+                        draw_text(str(event.key - 48), my_font, blue, window, row * 50 + 15, col * 50)
+                        play_board[row - 1][col - 1] = event.key - 48
+                    else:
+                        draw_text(str(event.key - 48), my_font, red, window, row * 50 + 15, col * 50)
+                        play_board[row - 1][col - 1] = -1
+                        mistakes += 1
+                        if mistakes == 3 :
+                            mistakes = 0
+                            game_over()
+                    pygame.display.update()
+
+                    return
+
+                if (event.key == 48) :
+                    pygame.draw.rect(screen, white, (row * 50 + buffer, col * 50 + buffer, 50 - 2 * buffer, 50 - 2 * buffer))
+                    if play_board[row - 1][col - 1] == -1 :
+                        mistakes -= 1
+
+                    play_board[row - 1][col - 1] = event.key - 48
+                    pygame.display.update()
+                    return
+
+                return
+
+
+def is_valid (board, row , col, gus):
+    for i in range(len(board)):
+        if board[i][col] == gus and i != row:
+            return False
+    for j in range(len(board[row])):
+        if board[row][j] == gus and j != col:
+            return False
+    # the leftUp corner point of the square
+    Rsquare = row // 3 * 3
+    Csquare = col // 3 * 3
+    for i in range(Rsquare, Rsquare + 3):
+        for j in range(Csquare, Csquare + 3):
+            if board[i][j] == gus and (i, j) != (row, col) :
+                return False
+    return True
+
+
+ # (grid , original grid ...)
+def is_correct(play_board, board, row , col ):
+    solve_board = solve_sudoku(board)
+    if solve_board:
+           # play_board[row - 1][col - 1] == :
+        return True
+    return False
+
+
+def check_cell(play_board, board) :
+     click = False
+     running = True
+     while running :
+
+         x, y = pygame.mouse.get_pos()
+         row, col = x//50, y//50
+         if click :
+             if is_correct(play_board, board, row, col) :
+                 pygame.draw.rect(screen, white, (row * 50 + buffer, col * 50 + buffer, 50 - 2 * buffer, 50 - 2 * buffer))
+                 draw_text(str(play_board[row-1][col-1]), my_font, green, screen, row * 50 + 15, col * 50)
+             else:
+                 pygame.draw.rect(screen, white, (row * 50 + buffer, col * 50 + buffer, 50 - 2 * buffer, 50 - 2 * buffer))
+                 draw_text(str(play_board[row - 1][col - 1]), my_font, red, screen, row * 50 + 15, col * 50)
+             pygame.display.update()
+             running = False
+
+         for event in pygame.event.get():
+            if event.type == click_up and event.button == 1 :
+                click = True
+            if event.type == quit :
+                pygame.quit()
+                sys.exit()
+                running = False
+
+# original grid
+def solve_sudoku(board):
+    r,c = find_empty_cell(board)
+    if r is None:
+        return board
+    for gus in range(1,10):
+        if is_valid (board, r , c, gus):
+            board[r][c] = gus
+            if solve_sudoku(board): # backtracking
+                return True
+            board[r][c] = 0
+    return False
+
+
+
+def difficulty (level) :
+    response = requests.get("https://sugoku.herokuapp.com/board?difficulty=" +level )
+    return response
+
+
+def easy():
+    global board_line
+    screen.fill(white)
+    draw_board()
+    response = difficulty("easy")
+    grid = response.json()['board']
+    original_grid = [[grid[x][y] for y in range(len(grid[0]))]for x in range(len(grid))]
+
+
+    for i in range(len(grid)) :
+        for j in range(len(grid[0])):
+             if grid[i][j] != 0 :
+                draw_text(str(grid[i][j]), my_font, black, screen, (i + 1) * 50 + 15, (j + 1) * 50)
+    pygame.display.update()
+
+    running = True
+    while running :
+
+        r, c = find_empty_cell(grid)
+        if r == None and mistakes == 0:
+            solve_board = solve_sudoku(grid)
+            if play_board == solve_board:
+                winner()
+
+        for event in pygame.event.get():
+            if event.type == quit:
+                pygame.quit()
+                sys.exit()
+                running = False
+            if event.type == keydown:
+                if event.key == escape:
+                    escape_menu()
+                    check_cell(grid, original_grid)
+                    pygame.display.update()
+            if event.type == click_up and event.button == 1 :
+                x, y = pygame.mouse.get_pos()
+                if board_line.collidepoint((x, y)):
+                    insert(screen, grid, original_grid, x // 50, y // 50)
+                    pygame.display.update()
+
+
+
+def medium():
+    global board_line
+    screen.fill(white)
+    draw_board()
+    response = difficulty("medium")
+    grid = response.json()['board']
+    original_grid = [[grid[x][y] for y in range(len(grid[0]))] for x in range(len(grid))]
+
+    for i in range(len(grid)):
+        for j in range(len(grid[0])):
+            if grid[i][j] != 0:
+                draw_text(str(grid[i][j]), my_font, black, screen, (i + 1) * 50 + 15, (j + 1) * 50)
+    pygame.display.update()
+
+    running = True
+    while running:
+
+        for event in pygame.event.get():
+            if event.type == quit:
+                pygame.quit()
+                running = False
+            if event.type == keydown:
+                if event.key == escape:
+                    pygame.draw.rect(screen, black, (150, 150, 250, 250))
+                    draw_text("Main Menu", rect_font, white, screen, 230, 190)
+                    draw_text("Check the", rect_font, white, screen, 234, 230)
+                    draw_text("solution", rect_font, white, screen, 245, 260)
+                    draw_text("Check the", rect_font, white, screen, 234, 300)
+                    draw_text("cell", rect_font, white, screen, 262, 330)
+                    pygame.display.update()
+            if event.type == click_up and event.button == 1:
+                x, y = pygame.mouse.get_pos()
+                if board_line.collidepoint((x, y)):
+                    insert(screen, grid, original_grid, x // 50, y // 50)
+                    pygame.display.update()
+
+
+def hard():
+    global board_line
+    screen.fill(white)
+    draw_board()
+    response = difficulty("hard")
+    grid = response.json()['board']
+    original_grid = [[grid[x][y] for y in range(len(grid[0]))] for x in range(len(grid))]
+
+    for i in range(len(grid)):
+        for j in range(len(grid[0])):
+            if grid[i][j] != 0:
+                draw_text(str(grid[i][j]), my_font, black, screen, (i + 1) * 50 + 15, (j + 1) * 50)
+    pygame.display.update()
+
+    running = True
+    while running:
+
+        for event in pygame.event.get():
+            if event.type == quit:
+                pygame.quit()
+                running = False
+            if event.type == keydown:
+                if event.key == escape:
+                    pygame.draw.rect(screen, gray, (150, 150, 250, 250))
+                    draw_text("Main Menu", rect_font, white, screen, 230, 190)
+                    draw_text("Check the", rect_font, white, screen, 234, 230)
+                    draw_text("solution", rect_font, white, screen, 245, 260)
+                    draw_text("Check the", rect_font, white, screen, 234, 300)
+                    draw_text("cell", rect_font, white, screen, 262, 330)
+                    pygame.display.update()
+            if event.type == click_up and event.button == 1:
+                x, y = pygame.mouse.get_pos()
+                if board_line.collidepoint((x, y)):
+                    insert(screen, grid, original_grid, x // 50, y // 50)
+                    pygame.display.update()
+
+
+def random():
+    global board_line
+    screen.fill(white)
+    draw_board()
+    response = difficulty("random")
+    grid = response.json()['board']
+    original_grid = [[grid[x][y] for y in range(len(grid[0]))] for x in range(len(grid))]
+
+    for i in range(len(grid)):
+        for j in range(len(grid[0])):
+            if grid[i][j] != 0:
+                draw_text(str(grid[i][j]), my_font, black, screen, (i + 1) * 50 + 15, (j + 1) * 50)
+    pygame.display.update()
+
+    running = True
+    while running:
+
+        for event in pygame.event.get():
+            if event.type == quit:
+                pygame.quit()
+                running = False
+            if event.type == keydown:
+                if event.key == escape:
+                    pygame.draw.rect(screen, black, (150, 150, 250, 250))
+                    draw_text("Main Menu", rect_font, white, screen, 230, 190)
+                    draw_text("Check the", rect_font, white, screen, 234, 230)
+                    draw_text("solution", rect_font, white, screen, 245, 260)
+                    draw_text("Check the", rect_font, white, screen, 234, 300)
+                    draw_text("cell", rect_font, white, screen, 262, 330)
+                    pygame.display.update()
+            if event.type == click_up and event.button == 1:
+                x, y = pygame.mouse.get_pos()
+                if board_line.collidepoint((x, y)):
+                    insert(screen, grid, original_grid, x // 50, y // 50)
+                    pygame.display.update()
+
+
+
+def game_over():
+    screen.fill(red)
+    running = True
+    click = False
+    while running:
+        draw_text("GAME OVER !", end_font, white, screen, 75, 150)
+        draw_text("3/3 MISTAKES", title, white, screen, 135, 240)
+        draw_text("Play Again", subtitle, white, screen, 200, 320)
+        pygame.display.update()
+        x,y = pygame.mouse.get_pos()
+        play_again = pygame.Rect(190, 310, 160, 50)
+
+        if play_again.collidepoint((x, y)):
+            if click:
+                main_menu()
+
+        click = False
+        for event in pygame.event.get():
+            if event.type == quit :
+                running = False
+            if event.type == click_up and event.button == 1 :
+                click = True
+
+    pygame.QUIT
+    sys.exit()
+
+
+def winner():
+    screen.fill(green)
+    running = True
+    click = False
+    while running:
+        draw_text("WINEER !", end_font, white, screen, 140, 150)
+        draw_text("Play Again", subtitle, white, screen, 200, 240)
+        draw_text("Quit", subtitle, white, screen, 240, 300)
+        pygame.display.update()
+        x, y = pygame.mouse.get_pos()
+        play_again = pygame.Rect (190 , 230 , 165, 50)
+        quit_game = pygame.Rect(230, 290 , 80 , 50)
+
+        if play_again.collidepoint((x, y)):
+            if click:
+                main_menu()
+        if quit_game.collidepoint((x,y)):
+            if click:
+                pygame.quit()
+                sys.exit()
+
+        click = False
+        for event in pygame.event.get():
+            if event.type == quit:
+                running = False
+            if event.type == click_up and event.button == 1:
+                click = True
+
+    pygame.QUIT
+    sys.exit()
+
+
+def escape_menu() :
+    running = True
+    click = False
+    while running:
+        pygame.draw.rect(screen, gray, (205, 165, 150, 205))
+        pygame.draw.ellipse(screen, white, (220, 180, 120, 40))
+        pygame.draw.ellipse(screen, white, (220, 235, 120, 60))
+        pygame.draw.ellipse(screen, white, (220, 310, 120, 40))
+        draw_text("Main Menu", rect_font, black, screen, 230, 190)
+        draw_text("Check the", rect_font, black, screen, 234, 245)
+        draw_text("cell", rect_font, black, screen, 262, 270)
+        draw_text("Quit", rect_font, black, screen, 257, 320)
+        pygame.display.update()
+        x, y = pygame.mouse.get_pos()
+
+        main_menu = pygame.Rect(220, 180, 120, 40)
+        check_the_cell = pygame.Rect(220, 235, 120, 60)
+        quit_game = pygame.Rect(220, 310, 120, 40)
+        if main_menu.collidepoint((x, y)):
+            if click:
+                main_menu()
+        if check_the_cell.collidepoint((x, y)):
+            if click:
+                running = False
+        if quit_game.collidepoint((x, y)):
+            if click:
+                pygame.quit()
+                sys.exit()
+                running = False
+        pygame.display.update()
+
+        if click :
+            running = False
+
+        for event in pygame.event.get():
+            if event.type == quit:
+                pygame.quit()
+                sys.exit()
+                running = False
+            if event.type == click_up and event.button == 1:
+                click = True
+
+
+
+
+def main_menu() :
+    screen.fill(white)
+    screen.blit(background_img, (0, 0))
+    running = True
+    click = False
+    while running:
+
+        draw_text("WELCOLE TO", title, black, screen, 135, 70)
+        draw_text("THE SUDOKU GAME", title, black, screen, 70, 130)
+        draw_text("choose your difficulty :", subtitle, black,screen, 80, 180)
+        draw_text("Easy", rect_font, white, screen, 245, 270)
+        draw_text("Mediun", rect_font, white, screen, 235, 310)
+        draw_text("Hard", rect_font, white, screen, 245, 350)
+        draw_text("Random", rect_font, white, screen, 235, 390)
+        pygame.display.update()
+        x, y = pygame.mouse.get_pos()
+
+        level_1 = pygame.Rect(150, 260, 240, 40)
+        level_2 = pygame.Rect(150, 300, 240, 40)
+        level_3 = pygame.Rect(150, 340, 240, 40)
+        level_4 = pygame.Rect(150, 380, 240, 40)
+        if level_1.collidepoint((x,y)) :
+            if click :
+                easy()
+        if level_2.collidepoint((x,y)) :
+            if click :
+                medium()
+        if level_3.collidepoint((x,y)) :
+            if click :
+                hard()
+        if level_4.collidepoint((x,y)) :
+            if click :
+                random()
+        pygame.draw.rect(screen, green, level_1)
+        pygame.draw.rect(screen, yellow, level_2)
+        pygame.draw.rect(screen, red, level_3)
+        pygame.draw.rect(screen, blue, level_4)
+
+        click = False
+        for event in pygame.event.get():
+            if event.type == quit:
+                running = False
+            if event.type == click_up and event.button == 1 :
+                click = True
+    pygame.quit()
+    sys.exit()
+
+
+
+
+main_menu()
+
+
+
